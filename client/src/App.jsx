@@ -10,6 +10,9 @@ function App() {
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const tasksPerPage = 10;
 
   // Shows an error in the banner (and logs it in the console)
   function showError(err) {
@@ -27,7 +30,6 @@ function App() {
       } catch (err) {
         showError(err);
       } finally {
-        // Stop loading whether it worked or failed
         setLoading(false);
       }
     }
@@ -35,12 +37,19 @@ function App() {
     loadTodos();
   }, []);
 
+  // Reset to page 1 whenever the filter changes
+  function handleFilterChange(newFilter) {
+    setFilter(newFilter);
+    setCurrentPage(1);
+  }
+
   // Add a new todo to the top of the list
   async function handleAdd(title) {
     try {
       setError("");
       const newTodo = await createTodo(title);
       setTodos((prev) => [newTodo, ...prev]);
+      setCurrentPage(1);
     } catch (err) {
       showError(err);
     }
@@ -81,6 +90,7 @@ function App() {
       }
 
       setTodos((prev) => prev.filter((todo) => !todo.completed));
+      setCurrentPage(1);
     } catch (err) {
       showError(err);
     }
@@ -89,7 +99,19 @@ function App() {
   // Only the todos that match the selected filter
   const filteredTodos = todos.filter(FILTERS[filter].test);
 
-  // "1 task" or "3 tasks"
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredTodos.length / tasksPerPage) || 1;
+  const indexOfLastTask = currentPage * tasksPerPage;
+  const indexOfFirstTask = indexOfLastTask - tasksPerPage;
+  const currentTasks = filteredTodos.slice(indexOfFirstTask, indexOfLastTask);
+
+  // Ensure currentPage does not exceed totalPages if tasks are deleted
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
   const taskWord = filteredTodos.length === 1 ? "task" : "tasks";
 
   // Decide what to show in the list area
@@ -113,16 +135,87 @@ function App() {
     }
 
     return (
-      <ul className="todo-list">
-        {filteredTodos.map((todo) => (
-          <TodoItem
-            key={todo._id}
-            todo={todo}
-            onUpdate={handleUpdate}
-            onDelete={handleDelete}
-          />
-        ))}
-      </ul>
+      <>
+        <ul className="todo-list">
+          {currentTasks.map((todo) => (
+            <TodoItem
+              key={todo._id}
+              todo={todo}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          ))}
+        </ul>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: "8px",
+              marginTop: "24px",
+              paddingBottom: "16px",
+            }}
+          >
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                backgroundColor: "#1e2238",
+                color: "#e2e8f0",
+                border: "1px solid #33395c",
+                cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                opacity: currentPage === 1 ? 0.4 : 1,
+              }}
+            >
+              &lt;
+            </button>
+
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map(
+              (pageNumber) => (
+                <button
+                  key={pageNumber}
+                  onClick={() => setCurrentPage(pageNumber)}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: "6px",
+                    border: "1px solid #33395c",
+                    backgroundColor:
+                      currentPage === pageNumber ? "#3b82f6" : "#1e2238",
+                    color: "#ffffff",
+                    fontWeight: currentPage === pageNumber ? "bold" : "normal",
+                    cursor: "pointer",
+                  }}
+                >
+                  {pageNumber}
+                </button>
+              )
+            )}
+
+            <button
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
+              disabled={currentPage === totalPages}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                backgroundColor: "#1e2238",
+                color: "#e2e8f0",
+                border: "1px solid #33395c",
+                cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                opacity: currentPage === totalPages ? 0.4 : 1,
+              }}
+            >
+              &gt;
+            </button>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -131,7 +224,7 @@ function App() {
       <Sidebar
         todos={todos}
         filter={filter}
-        onFilter={setFilter}
+        onFilter={handleFilterChange}
         onClearDone={handleClearDone}
       />
 
